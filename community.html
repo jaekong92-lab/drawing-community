@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>그림 커뮤니티</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        h1 {
+            color: #3f51b5;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .main-content {
+            flex-grow: 3;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .sidebar {
+            flex-grow: 1;
+            max-width: 300px;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #5c6bc0;
+            color: white;
+            font-weight: bold;
+            transition: background-color 0.2s;
+            margin-left: 5px;
+        }
+        button:hover:not(:disabled) {
+            background-color: #3f51b5;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* === 정렬 및 페이지네이션 컨트롤 === */
+        .controls-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .sort-options button {
+            background-color: #7986cb;
+            padding: 8px 12px;
+            font-size: 0.9em;
+        }
+        .sort-options button.active {
+            background-color: #3f51b5;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+            gap: 5px;
+        }
+        .pagination button {
+            background-color: #e0e0e0;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            min-width: 40px;
+        }
+        .pagination button.active {
+            background-color: #3f51b5;
+            color: white;
+            border-color: #3f51b5;
+        }
+        
+        /* === 게시물 목록 스타일 === */
+        .post-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .post-card {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .post-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+        .post-card img {
+            width: 100%;
+            height: 200px; 
+            object-fit: cover; 
+            display: block;
+            background-color: #e8eaf6;
+        }
+        .post-info {
+            padding: 10px;
+        }
+        .post-stats {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* === 랭킹 스타일 === */
+        .ranking-box {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            margin-bottom: 20px;
+        }
+        .ranking-box h2 {
+            margin-top: 0;
+            color: #ff9800;
+            border-bottom: 1px solid #ff9800;
+            padding-bottom: 5px;
+            font-size: 1.2em;
+        }
+        .ranking-list {
+            list-style: none;
+            padding: 0;
+        }
+        .ranking-list li {
+            padding: 8px 0;
+            border-bottom: 1px dotted #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer; 
+        }
+        .ranking-list li:hover {
+            background-color: #fff3e0;
+        }
+        .ranking-list .rank-title {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            margin-right: 5px;
+            min-width: 0; 
+        }
+        .ranking-list .rank-mini-img {
+            width: 25px;
+            height: 25px;
+            object-fit: cover;
+            border-radius: 3px;
+            margin-left: 5px;
+        }
+        
+        .rank-num {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #3f51b5;
+            margin-right: 10px;
+        }
+
+        /* === 모달 스타일 === */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.7); 
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; 
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            cursor: pointer;
+        }
+        .modal-image-area img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            margin: 15px 0;
+            background-color: #e8eaf6;
+        }
+        .interaction-section {
+            margin: 20px 0;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .interaction-section button {
+            padding: 10px 15px;
+            font-size: 1em;
+        }
+        .interaction-section #modalLikeBtn {
+            background-color: #f44336;
+        }
+        .interaction-section #deletePostBtn {
+            background-color: #f0ad4e; 
+            margin-left: 10px; 
+            display: none; 
+        }
+
+        /* === 댓글 섹션 === */
+        .modal-info-area {
+            margin-top: 20px;
+        }
+        .comment-list {
+            border: 1px solid #eee;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+            border-radius: 5px;
+        }
+        .comment-list div {
+            padding: 5px 0;
+            border-bottom: 1px dotted #e0e0e0;
+            font-size: 0.9em;
+        }
+        .comment-list div:last-child {
+            border-bottom: none;
+        }
+        .comment-input {
+            display: flex;
+        }
+        .comment-input input {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .comment-input button {
+            width: 60px;
+            padding: 8px;
+            margin-left: 5px;
+            background-color: #4caf50;
+        }
+        
+        /* === 글 작성 모달 스타일 === */
+        #writeModal .modal-content {
+            max-width: 700px;
+        }
+        #pendingImagePreview {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin: 10px 0;
+            background-color: #e8eaf6;
+        }
+        #postTitleInput, #postContentInput {
+            width: calc(100% - 16px);
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #postContentInput {
+            resize: vertical;
+        }
+        #writeModal button {
+            background-color: #28a745; 
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>🎨 온라인 그림 커뮤니티</h1>
+    <p>그림을 올려주세요~.</p>
+    
+    <div class="toolbar">
+    <a href="http://localhost:3000/index.html"><button>⬅️ 그림판으로 돌아가기</button></a>
+    <div>
+        <span id="userInfo" style="margin-right: 15px; font-weight: bold;"></span>
+        
+        <button id="writeBtn" onclick="checkAuthAndOpenWriteModal()" disabled>🔒 로그인 후 작성 가능</button>
+        
+        <button id="authBtn" onclick="openAuthModal()">🚪 로그인 / 회원가입</button>
+    </div>
+</div>
+
+    <div class="container">
+        <div class="main-content">
+            <h2>전체 그림 게시판</h2>
+            
+            <div class="controls-top">
+                <div class="sort-options">
+                    <button id="sortLatest" onclick="sortPosts('latest')" class="active">최신순</button>
+                    <button id="sortPopular" onclick="sortPosts('popular')">인기순</button>
+                    <button id="sortComments" onclick="sortPosts('comments')">댓글순</button>
+                </div>
+            </div>
+
+            <div id="postList" class="post-list">
+                </div>
+
+            <div id="pagination" class="pagination">
+                </div>
+            
+        </div>
+
+        <div class="sidebar">
+            <div class="ranking-box">
+                <h2>🏆 좋아요 랭킹 TOP 10</h2>
+                <ul id="rankingList" class="ranking-list">
+                    </ul>
+            </div>
+        </div>
+    </div>
+
+    <div id="postModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            
+            <div class="modal-image-area">
+                <h2 id="modalTitle"></h2>
+                <p><strong>작성자:</strong> <span id="modalAuthor"></span></p>
+                <img id="modalImage" src="" alt="게시된 그림">
+                <p id="modalContent"></p>
+
+                <div class="interaction-section">
+                    <button id="modalLikeBtn" onclick="toggleLike()">❤️ 좋아요 (<span id="likeCount">0</span>)</button>
+                    
+                    <button id="deletePostBtn" style="background-color: #f0ad4e; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px; display: none;">
+                        🗑️ 삭제하기
+                    </button>
+                </div>
+                <div class="modal-info-area">
+                    <h3>댓글</h3>
+                    <div id="commentList" class="comment-list">
+                        </div>
+                    
+                    <div class="comment-input">
+                        <input type="text" id="commentInput" placeholder="댓글을 입력하세요.">
+                        <button onclick="addComment()">등록</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="writeModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h2>🎨 새 그림 게시글 작성</h2>
+            <hr>
+            
+            <p><strong>작성자:</strong> <span id="writeAuthor">익명 (자동 지정)</span></p>
+            
+            <h3>1. 업로드할 그림 미리보기</h3>
+            <img id="pendingImagePreview" src="" alt="임시 저장된 그림">
+            <br><br>
+            
+            <h3>2. 제목 및 내용 입력</h3>
+            <label for="postTitleInput">제목:</label>
+            <input type="text" id="postTitleInput" placeholder="게시글 제목을 입력하세요.">
+            
+            <label for="postContentInput">내용 (코멘트):</label>
+            <textarea id="postContentInput" placeholder="그림에 대한 설명을 입력하세요." rows="5"></textarea>
+            
+            <button onclick="submitPost()">✅ 게시하기</button>
+        </div>
+    </div>
+    <div id="authModal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal('authModal')">&times;</span>
+        <h2 id="authModalTitle">로그인</h2>
+        <hr>
+        
+        <form id="authForm">
+            <label for="usernameInput">사용자 이름:</label>
+            <input type="text" id="usernameInput" placeholder="사용자 이름을 입력하세요." required style="width: calc(100% - 18px); padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px;">
+            
+            <label for="passwordInput">비밀번호:</label>
+            <input type="password" id="passwordInput" placeholder="비밀번호를 입력하세요." required style="width: calc(100% - 18px); padding: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px;">
+            
+            <p id="authMessage" style="color: red; margin-bottom: 10px;"></p>
+
+            <button type="button" id="loginActionBtn" style="background-color: #5c6bc0; width: 100%; margin-bottom: 10px;">로그인 실행</button>
+            
+            <button type="button" id="toggleAuthBtn" style="background-color: #4caf50; width: 100%;">회원가입으로 전환</button>
+        </form>
+    </div>
+</div>
+    <script>
+const API_BASE_URL = 'http://localhost:3000'; 
+    let IS_LOGGED_IN = false;
+    let LOGGED_IN_USERNAME = '';
+    let currentPostId = null;
+    let allFetchedPosts = [];
+
+    // --- DOMContentLoaded 이벤트 리스너 ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // ⭐ 중요: 초기 로드 시 버튼이 비활성화되는 것을 방지합니다.
+        const authBtn = document.getElementById('authBtn');
+        if (authBtn) {
+            authBtn.disabled = false;
+        }
+        
+        checkLoginStatus(); 
+
+        // 모달 닫기 버튼 이벤트 리스너 추가
+        document.querySelectorAll('.close-btn').forEach(span => {
+            span.addEventListener('click', (e) => {
+                const modal = e.target.closest('.modal');
+                if (modal) closeModal(modal.id);
+            });
+        });
+
+        // 정렬 버튼 이벤트 연결
+        document.getElementById('sortLatest')?.addEventListener('click', () => sortAndDisplayPosts('latest'));
+        document.getElementById('sortPopular')?.addEventListener('click', () => sortAndDisplayPosts('popular'));
+        document.getElementById('sortComments')?.addEventListener('click', () => sortAndDisplayPosts('comments'));
+        
+        // 로그인 상태에 따라 게시판 로드 처리
+        if (IS_LOGGED_IN) {
+            fetchPosts(); 
+        } else {
+            displayLoginRequiredMessage();
+            openAuthModal(); // 로그인 모달 강제 오픈
+        }
+    });
+
+
+    // --- 로그인 상태 확인 및 UI 업데이트 ---
+    function checkLoginStatus() {
+        const token = localStorage.getItem('token');
+        const username = localStorage.getItem('username');
+        const userInfoSpan = document.getElementById('userInfo');
+        const writeBtn = document.getElementById('writeBtn');
+        const authBtn = document.getElementById('authBtn');
+
+        // 1. 로그인 상태 설정
+        IS_LOGGED_IN = !!(token && username); // Boolean으로 명확하게 설정
+        LOGGED_IN_USERNAME = username || '';
+        
+        // 2. UI 업데이트
+        if(userInfoSpan) userInfoSpan.textContent = IS_LOGGED_IN ? `환영합니다, ${LOGGED_IN_USERNAME}님!` : '로그인 필요'; 
+
+        if(authBtn) {
+            if (IS_LOGGED_IN) {
+                authBtn.textContent = '🚪 로그아웃';
+                authBtn.onclick = logout;
+            } else {
+                authBtn.textContent = '🚪 로그인 / 회원가입';
+                // ⭐ 버튼 클릭 이벤트가 제대로 연결되도록 다시 설정
+                authBtn.onclick = openAuthModal; 
+            }
+            // ⭐ 이 버튼은 항상 활성화되어야 합니다.
+            authBtn.disabled = false; 
+        }
+        
+        // 3. 작성 버튼 업데이트
+        if(writeBtn) {
+            const imageData = localStorage.getItem('currentDrawing');
+            if (IS_LOGGED_IN) {
+                writeBtn.textContent = imageData ? '✅ 새 그림 게시글 작성' : '🖼️ 업로드할 그림 없음';
+                writeBtn.disabled = !imageData;
+                writeBtn.onclick = checkAuthAndOpenWriteModal;
+            } else {
+                writeBtn.textContent = '🔒 로그인 후 작성 가능';
+                writeBtn.disabled = true;
+                writeBtn.onclick = openAuthModal; 
+            }
+        }
+    }
+
+    // --- 로그아웃 처리 ---
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('username');
+        alert("로그아웃 되었습니다. 다시 로그인해야 게시판을 볼 수 있습니다.");
+        checkLoginStatus();
+        displayLoginRequiredMessage();
+        openAuthModal(); 
+    }
+
+    // --- 게시물 대신 로그인 필요 메시지 표시 ---
+    function displayLoginRequiredMessage() {
+        const container = document.getElementById('postList');
+        if (container) {
+            container.innerHTML = '<p style="text-align: center; padding: 40px; font-size: 1.2em; color: #f44336; border: 2px solid #f4433630;">🚨 게시물을 보려면 로그인해야 합니다. 🚨</p>';
+        }
+        const rankingList = document.getElementById('rankingList');
+        if (rankingList) {
+            rankingList.innerHTML = '<li>로그인 후 랭킹을 볼 수 있습니다.</li>';
+        }
+    }
+
+
+    // --- 로그인/회원가입 모달 열기 ---
+    function openAuthModal() {
+        const modalId = 'authModal'; 
+        const modal = document.getElementById(modalId);
+        if (!modal) return;
+        
+        document.getElementById('authModalTitle').textContent = '로그인';
+        document.getElementById('usernameInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        document.getElementById('authMessage').textContent = '';
+        document.getElementById('loginActionBtn').textContent = '로그인 실행';
+        document.getElementById('toggleAuthBtn').textContent = '회원가입으로 전환';
+        
+        document.getElementById('loginActionBtn').onclick = () => handleAuthSubmit(false);
+        document.getElementById('toggleAuthBtn').onclick = toggleAuthMode;
+
+        modal.style.display = 'block';
+    }
+
+    // --- 로그인/회원가입 모드 전환 ---
+    function toggleAuthMode() {
+        const title = document.getElementById('authModalTitle');
+        const actionBtn = document.getElementById('loginActionBtn');
+        const toggleBtn = document.getElementById('toggleAuthBtn');
+        const isLoginMode = title.textContent === '로그인';
+
+        if (isLoginMode) {
+            title.textContent = '회원가입';
+            actionBtn.textContent = '회원가입 실행';
+            toggleBtn.textContent = '로그인으로 전환';
+            actionBtn.onclick = () => handleAuthSubmit(true);
+        } else {
+            title.textContent = '로그인';
+            actionBtn.textContent = '로그인 실행';
+            toggleBtn.textContent = '회원가입으로 전환';
+            actionBtn.onclick = () => handleAuthSubmit(false);
+        }
+        document.getElementById('authMessage').textContent = '';
+    }
+
+
+    // --- 로그인 및 회원가입 처리 ---
+    async function handleAuthSubmit(isRegisterMode) {
+        const username = document.getElementById('usernameInput').value;
+        const password = document.getElementById('passwordInput').value;
+        const authMessage = document.getElementById('authMessage');
+
+        if (username.length < 3 || password.length < 4) {
+            authMessage.textContent = '사용자 이름은 3자, 비밀번호는 4자 이상이어야 합니다.';
+            return;
+        }
+
+        authMessage.textContent = '..처리 중...';
+
+        const endpoint = isRegisterMode ? `${API_BASE_URL}/auth/register` : `${API_BASE_URL}/auth/login`;
+        
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            const contentType = response.headers.get("content-type");
+            const data = (contentType && contentType.includes("application/json")) ? await response.json() : { message: '서버 응답 오류' };
+
+            if (response.ok) {
+                authMessage.textContent = data.message;
+                if (!isRegisterMode) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('username', username);
+                    checkLoginStatus(); 
+                    closeModal('authModal');
+                    fetchPosts();
+                } else {
+                    setTimeout(() => {
+                        toggleAuthMode();
+                        document.getElementById('authMessage').textContent = '회원가입 성공! 이제 로그인하세요.';
+                    }, 1000);
+                }
+            } else {
+                authMessage.textContent = `오류: ${data.message || '알 수 없는 서버 오류'}`;
+            }
+        } catch (error) {
+            console.error('인증 오류:', error);
+            authMessage.textContent = '🚨 서버 통신 오류 발생. `server.js`가 실행 중인지 확인하세요.';
+        }
+    }
+
+    // --- 모달 열기/닫기 ---
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if(modal) modal.style.display = 'block';
+    }
+
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if(modal) modal.style.display = 'none';
+    }
+
+
+    // ==========================================================
+    // 2. 게시물 로드 및 기타 기능 (이하 코드는 이전과 동일)
+    // ==========================================================
+
+    async function fetchPosts() {
+        if (!IS_LOGGED_IN) {
+            displayLoginRequiredMessage();
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const response = await fetch(`${API_BASE_URL}/posts`, { headers });
+            
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    alert("인증이 만료되었거나 접근 권한이 없습니다. 다시 로그인해주세요.");
+                    logout(); 
+                    return;
+                }
+                throw new Error(`게시물 로드 실패: HTTP status ${response.status}`);
+            }
+            
+            const data = await response.json();
+            if (!Array.isArray(data.posts)) {
+                allFetchedPosts = [];
+                sortAndDisplayPosts('latest'); 
+                displayRanking(data.ranking); 
+                return;
+            }
+
+            allFetchedPosts = data.posts;
+            sortAndDisplayPosts('latest'); 
+            displayRanking(data.ranking);
+
+        } catch (error) {
+            console.error("게시물 로드 실패:", error);
+            alert(`게시물을 불러오는 데 실패했습니다. 서버(server.js)가 실행 중인지 확인하세요. 오류: ${error.message}`);
+            displayPosts([]);
+            displayRanking([]);
+            displayLoginRequiredMessage(); 
+        }
+    }
+
+    function sortAndDisplayPosts(sortType) {
+        const sortButtons = document.querySelectorAll('.sort-options button');
+        sortButtons.forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.getElementById(`sort${sortType.charAt(0).toUpperCase() + sortType.slice(1)}`);
+        if(activeBtn) activeBtn.classList.add('active');
+        
+        let sortedPosts = [...allFetchedPosts]; 
+
+        if (sortType === 'latest') {
+            sortedPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        } else if (sortType === 'popular') {
+            sortedPosts.sort((a, b) => b.likes - a.likes);
+        } else if (sortType === 'comments') {
+            sortedPosts.sort((a, b) => (b.comments ? b.comments.length : 0) - (a.comments ? b.comments.length : 0));
+        }
+
+        displayPosts(sortedPosts);
+    }
+
+    function displayPosts(posts) {
+        const container = document.getElementById('postList'); 
+        if (!container) return;
+        container.innerHTML = '';
+
+        if (posts.length === 0) {
+            container.innerHTML = '<p style="text-align: center; padding: 20px;">게시물이 없습니다. 새로운 그림을 올려보세요!</p>';
+            return;
+        }
+
+        posts.forEach(post => {
+            const postElement = document.createElement('div');
+            postElement.className = 'post-card';
+            postElement.onclick = () => showPostDetail(post._id); 
+            postElement.innerHTML = `
+                <img src="${post.imageData}" alt="${post.title}" class="post-image">
+                <div class="post-info">
+                    <h3>${post.title}</h3>
+                    <div class="post-stats">
+                        <span>👤 ${post.author}</span>
+                        <span>❤️ ${post.likes || 0} | 💬 ${post.comments ? post.comments.length : 0}</span>
+                    </div>
+                </div>
+            `;
+            container.appendChild(postElement);
+        });
+    }
+
+    function displayRanking(ranking) {
+        const rankingList = document.getElementById('rankingList');
+        if (!rankingList) return;
+        rankingList.innerHTML = '';
+
+        if (ranking.length === 0) {
+            rankingList.innerHTML = '<li>랭킹 정보가 없습니다.</li>';
+            return;
+        }
+
+        ranking.forEach((post, index) => {
+            const listItem = document.createElement('li');
+            listItem.onclick = () => showPostDetail(post._id);
+            listItem.innerHTML = `
+                <span class="rank-num">${index + 1}.</span>
+                <div class="rank-title">
+                    ${post.title} (${post.author})
+                    <img src="${post.imageData}" alt="미니 이미지" class="rank-mini-img">
+                </div>
+                <span>❤️ ${post.likes}</span>
+            `;
+            rankingList.appendChild(listItem);
+        });
+    }
+
+    function checkAuthAndOpenWriteModal() {
+        if (!IS_LOGGED_IN) {
+            alert("그림 공유를 하려면 로그인 후 이용 가능합니다.");
+            openAuthModal();
+            return;
+        }
+
+        const imageData = localStorage.getItem('currentDrawing');
+
+        if (!imageData) {
+            alert("업로드할 그림이 없습니다. 그림판 페이지에서 그림을 그린 후 저장하거나 시도해주세요.");
+            return;
+        }
+        
+        document.getElementById('writeAuthor').textContent = LOGGED_IN_USERNAME;
+        document.getElementById('pendingImagePreview').src = imageData;
+        document.getElementById('postTitleInput').value = '';
+        document.getElementById('postContentInput').value = '';
+
+        openModal('writeModal');
+    }
+
+    async function submitPost() {
+        if (!IS_LOGGED_IN) {
+            alert("로그인 후 게시물을 등록할 수 있습니다.");
+            openAuthModal();
+            return;
+        }
+        
+        const postTitle = document.getElementById('postTitleInput').value.trim();
+        const postContent = document.getElementById('postContentInput').value.trim();
+        const imageData = localStorage.getItem('currentDrawing'); 
+
+        if (!postTitle || !postContent || !imageData) {
+            alert("제목, 내용, 그림이 모두 필요합니다.");
+            return;
+        }
+
+        try {
+            const url = `${API_BASE_URL}/posts`; // 이 부분은 그대로 둡니다.
+            
+const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}` // ✅ 수정된 부분: 'authToken' -> 'token'
+    },
+                body: JSON.stringify({ 
+                    title: postTitle, 
+                    content: postContent, 
+                    imageData: imageData 
+                })
+            });
+
+            if (response.ok) {
+                alert("게시물이 성공적으로 등록되었습니다!");
+                closeModal('writeModal');
+                fetchPosts(); 
+                localStorage.removeItem('currentDrawing'); 
+                checkLoginStatus(); 
+            } else if (response.status === 401 || response.status === 403) {
+                 alert("게시물 작성 권한이 없거나 로그인이 만료되었습니다. 다시 로그인 해주세요.");
+                 logout();
+            } else {
+                const contentType = response.headers.get("content-type");
+                const errorData = (contentType && contentType.includes("application/json")) ? await response.json() : { message: '서버 오류 (500)' };
+                alert(`게시물 등록 실패: ${errorData.message}`);
+            }
+        } catch (error) {
+            console.error('Error submitting post:', error);
+            alert("게시물 등록 중 서버 오류가 발생했습니다. API 경로와 서버 실행 상태를 확인하세요.");
+        }
+    }
+
+    async function fetchPostDetails(postId) {
+        if (!IS_LOGGED_IN) return null; 
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const response = await fetch(`${API_BASE_URL}/posts/${postId}`, { headers });
+            if (response.ok) {
+                return await response.json();
+            } else if (response.status === 401 || response.status === 403) {
+                logout();
+                return null;
+            }
+        } catch (error) {
+            console.error("게시물 상세 정보 로드 실패:", error);
+            return null;
+        }
+    }
+
+    async function showPostDetail(postId) {
+        if (!IS_LOGGED_IN) {
+            alert("로그인해야 게시물 상세 정보를 볼 수 있습니다.");
+            openAuthModal();
+            return;
+        }
+
+        currentPostId = postId;
+        
+        try {
+            const post = await fetchPostDetails(postId);
+            if (!post) {
+                 alert('게시물 상세 정보를 불러오는 데 실패했습니다.');
+                 return;
+            }
+            
+            document.getElementById('modalTitle').textContent = post.title;
+            document.getElementById('modalAuthor').textContent = post.author;
+            document.getElementById('modalImage').src = post.imageData;
+            document.getElementById('modalContent').textContent = post.content;
+            
+            updateLikeDisplay(post); 
+
+            const deleteBtn = document.getElementById('deletePostBtn');
+            if (deleteBtn) {
+                if (post.author === LOGGED_IN_USERNAME) {
+                    deleteBtn.style.display = 'inline-block';
+                    deleteBtn.onclick = () => deletePost(post._id);
+                } else {
+                    deleteBtn.style.display = 'none';
+                }
+            }
+
+            displayComments(post.comments || []);
+
+            openModal('postModal');
+        } catch (error) {
+            console.error('Failed to show post detail:', error);
+            alert('게시물 상세 정보를 불러오는 데 실패했습니다.');
+        }
+    }
+
+    function updateLikeDisplay(post) {
+        const likeBtn = document.getElementById('modalLikeBtn');
+        const likeCountSpan = document.getElementById('likeCount');
+        if (!likeBtn || !likeCountSpan) return;
+
+        const currentLikes = post.likes || 0;
+        likeCountSpan.textContent = currentLikes;
+        
+        if (!IS_LOGGED_IN) {
+            likeBtn.disabled = true;
+            likeBtn.innerHTML = `🔒 로그인 후 좋아요 가능`;
+            likeBtn.style.backgroundColor = '#6c757d'; 
+            return;
+        }
+        
+        const isLiked = post.isLiked;
+
+        if (isLiked) {
+            likeBtn.disabled = false;
+            likeBtn.innerHTML = `🧡 좋아요 취소 (<span id="likeCount">${currentLikes}</span>)`;
+            likeBtn.style.backgroundColor = '#f44336'; 
+        } else {
+            likeBtn.disabled = false;
+            likeBtn.innerHTML = `❤️ 좋아요 (<span id="likeCount">${currentLikes}</span>)`; 
+            likeBtn.style.backgroundColor = '#5c6bc0';
+        }
+    }
+
+    async function toggleLike() {
+        if (!IS_LOGGED_IN) {
+            alert("로그인 후 이용할 수 있습니다.");
+            openAuthModal();
+            return;
+        }
+
+        if (!currentPostId) return;
+
+        try {
+            const url = `${API_BASE_URL}/posts/${currentPostId}/like`;
+            const response = await fetch(url, {
+                method: 'POST', 
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const updatedPost = await fetchPostDetails(currentPostId);
+                if (updatedPost) {
+                    updateLikeDisplay(updatedPost); 
+                    fetchPosts(); 
+                }
+            } else if (response.status === 401) {
+                alert("로그인이 만료되었거나 필요합니다.");
+                logout();
+            } else {
+                alert("좋아요 처리 중 오류가 발생했습니다.");
+            }
+        } catch (error) {
+            console.error("Error toggling like:", error);
+        }
+    }
+
+    async function deletePost(postId) {
+        if (!confirm("정말로 이 게시물을 삭제하시겠습니까?")) return;
+        
+        try {
+            const url = `${API_BASE_URL}/posts/${postId}`; 
+            
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                }
+            });
+
+            if (response.ok) {
+                alert("게시물이 성공적으로 삭제되었습니다.");
+                closeModal('postModal');
+                fetchPosts(); 
+            } else if (response.status === 401 || response.status === 403) {
+                 alert("삭제 권한이 없거나 로그인이 필요합니다.");
+                 logout();
+            } else {
+                const errorText = await response.text();
+                alert(`삭제 실패: ${errorText}`);
+            }
+
+        } catch (error) {
+            console.error('Error deleting post:', error);
+            alert("게시물 삭제 중 오류가 발생했습니다.");
+        }
+    }
+
+    function displayComments(comments) {
+        const commentList = document.getElementById('commentList');
+        if (!commentList) return;
+        commentList.innerHTML = ''; 
+
+        if (comments.length === 0) {
+            commentList.innerHTML = '<p style="margin: 0; padding: 5px; color: #666;">댓글이 없습니다. 첫 댓글을 달아보세요!</p>';
+            return;
+        }
+
+        comments.forEach(comment => {
+            const commentElement = document.createElement('div');
+            commentElement.className = 'comment';
+            commentElement.innerHTML = `<p style="margin: 0;"><strong>${comment.author}</strong>: ${comment.text}</p>`;
+            commentList.appendChild(commentElement);
+        });
+    }
+
+    async function addComment() {
+        if (!IS_LOGGED_IN) {
+            alert("로그인 후 댓글을 작성할 수 있습니다.");
+            openAuthModal();
+            return;
+        }
+        
+        const commentInput = document.getElementById('commentInput');
+        const commentText = commentInput.value.trim();
+
+        if (!commentText) {
+            alert("댓글 내용을 입력해주세요.");
+            return;
+        }
+        
+        try {
+            const url = `${API_BASE_URL}/posts/${currentPostId}/comment`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ commentText: commentText })
+            });
+            
+            if (response.ok) {
+                commentInput.value = ''; 
+                const post = await fetchPostDetails(currentPostId); 
+                if (post) {
+                     displayComments(post.comments); 
+                     fetchPosts(); 
+                }
+            } else if (response.status === 401) {
+                 alert("댓글을 작성할 권한이 없거나 로그인이 만료되었습니다.");
+                 logout();
+            } else {
+                alert("댓글 작성에 실패했습니다.");
+            }
+        } catch (error) {
+            console.error('Error adding comment:', error);
+            alert("댓글 작성 중 서버 오류가 발생했습니다.");
+        }
+    }
+    </script>
+</body>
+</html>

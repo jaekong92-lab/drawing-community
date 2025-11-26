@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>온라인 그림판 (Online Drawing Tool)</title>
+<style>
+/* 캔버스 컨트롤 영역 스타일링 (선택 사항) */
+.controls {
+    margin-bottom: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+    display: inline-block;
+}
+.tool-button {
+    cursor: pointer;
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    background-color: #fff;
+    margin-right: 5px;
+    border-radius: 3px;
+}
+/* 'active' 클래스를 툴 선택 시 적용 */
+.tool-button.active {
+    background-color: #a4c8f5;
+    color: white;
+    border-color: #5b9bf8;
+}
+</style>
+</head>
+<body onload="init()">
+<h3>마우스 좌클릭 그리기 (기본 펜), 마우스 우클릭 지우기, Ctrl + 좌클릭으로 직선 그리기, Ctrl + 우클릭으로 전부 지우기 </h3>
+<p>
+    <strong>Shift + &lt; (쉼표)</strong>: 실행 취소 (Undo) | 
+    <strong>Shift + &gt; (마침표)</strong>: 다시 실행 (Redo) |
+    <strong>Shift + 드래그</strong>: 정규 도형 그리기 (정사각형, 정삼각형, 정원)
+</p>
+<hr>
+
+<div class="controls">
+    <label for="colorPicker">🎨 그리기 색상: </label>
+    <input type="color" id="colorPicker" value="#000000"> 
+    &nbsp;&nbsp;&nbsp;
+    <label for="penLineWidthRange">펜 굵기: </label>
+    <input type="range" id="penLineWidthRange" min="1" max="50" value="2">
+    <span id="currentPenLineWidth">2</span>px
+    &nbsp;&nbsp;&nbsp;
+    <label for="eraseLineWidthRange">지우개 굵기: </label>
+    <input type="range" id="eraseLineWidthRange" min="1" max="100" value="20">
+    <span id="currentEraseLineWidth">20</span>px
+</div>
+
+<div class="controls">
+    <button class="tool-button active" id="toolPencil" onclick="setTool('pencil')">✏️ 펜</button>
+    <button class="tool-button" id="toolFill" onclick="setTool('fill')"> bucket 채우기</button>
+    <button class="tool-button" id="toolEyedropper" onclick="setTool('eyedropper')">💉 스포이드</button>
+    <button class="tool-button" id="toolRectangle" onclick="setTool('rectangle')">🟦 사각형</button>
+    <button class="tool-button" id="toolCircle" onclick="setTool('circle')">⭕ 원</button>
+    <button class="tool-button" id="toolTriangle" onclick="setTool('triangle')">🔺 삼각형</button>
+    &nbsp;&nbsp;&nbsp;
+    <button onclick="downloadCanvas()">🖼️ 그림 저장 (PNG)</button>
+    &nbsp;&nbsp;&nbsp;
+    <button onclick="uploadCanvas()">📢 그림 공유하기</button>
+</div>
+<br>
+
+<canvas id="myCanvas" style="background-color:aliceblue; border: 1px solid #ccc;" width="2100" height="800"></canvas>
+
+<script>
+let canvas, context;
+const DEFAULT_PEN_LINE_WIDTH = 2; 
+const DEFAULT_ERASE_LINE_WIDTH = 20; 
+const BACKGROUND_COLOR = "aliceblue"; 
+const ERASE_COLOR = BACKGROUND_COLOR;  // 지우개는 배경색으로 덮어쓰는 방식으로 작동합니다.
+
+let startX = 0, startY = 0; 
+let drawing = false; 
+let isErasing = false; 
+
+// 툴 관련 변수
+let currentTool = 'pencil'; 
+let isDrawingShape = false; 
+let isShiftPressed = false; 
+
+// 굵기 관련 DOM 변수
+let penLineWidthRange, eraseLineWidthRange, currentPenLineWidthSpan, currentEraseLineWidthSpan;
+
+// === Undo/Redo 관련 변수 ===
+let history = []; 
+let historyPointer = -1; 
+const MAX_HISTORY_SIZE = 30; 
+
+
+// === [유틸리티 함수] ===
+function rgbToHex(r, g, b) {
+    // 0~255 값을 16진수 두 자리 문자열로 변환
+    if (r > 255 || g > 255 || b > 255) return "000000";
+    return ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+
+
+/**
+ * 현재 상태(isErasing)에 따라 context의 색상과 굵기를 업데이트하는 함수
+ */
+function updateContextStyles() {
+    if (isErasing) {
+        context.strokeStyle = ERASE_COLOR;
+        context.fillStyle = ERASE_COLOR;
+        context.lineWidth = eraseLineWidthRange.value;
+        context.globalCompositeOperation = 'source-over'; // 일반 덮어쓰기 모드
+    } else {
+        context.strokeStyle = document.getElementById("colorPicker").value;
+        context.fillStyle = document.getElementById("colorPicker").value;
+        context.lineWidth = penLineWidthRange.value;
+        context.globalCompositeOperation = 'source-over'; // 일반 그리기 모드
+    }
+}
+
+function init() {
+    canvas = document.getElementById("myCanvas");
+    context = canvas.getContext("2d");
+    
+    // 컨트롤 요소 DOM 객체 가져오기
+    let colorPicker = document.getElementById("colorPicker");
+    
+    penLineWidthRange = document.getElementById("penLineWidthRange");
+    eraseLineWidthRange = document.getElementById("eraseLineWidthRange");
+    currentPenLineWidthSpan = document.getElementById("currentPenLineWidth");
+    currentEraseLineWidthSpan = document.getElementById("currentEraseLineWidth");
+
+    context.fillStyle = BACKGROUND_COLOR;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 초기 스타일 설정
+    updateContextStyles(); 
+    
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    
+    // 마우스 이벤트 리스너
+    canvas.addEventListener("mousemove", move, false);
+    canvas.addEventListener("mousedown", down, false);
+    canvas.addEventListener("mouseup", up, false);
+    canvas.addEventListener("mouseout", out, false);
+    
+    canvas.addEventListener("contextmenu", function(e) { e.preventDefault(); }, false);
+    
+    document.addEventListener("keydown", handleKeydown, false);
+    document.addEventListener("keyup", handleKeyup, false); 
+
+    // 설정 변경 이벤트 리스너
+    colorPicker.addEventListener("input", updateContextStyles);
+
+    penLineWidthRange.addEventListener("input", function() {
+        currentPenLineWidthSpan.textContent = this.value;
+        if (!isErasing) updateContextStyles();
+    });
+
+    eraseLineWidthRange.addEventListener("input", function() {
+        currentEraseLineWidthSpan.textContent = this.value;
+        if (isErasing) updateContextStyles();
+    });
+    
+    saveState(); 
+}
+
+function setTool(toolName) {
+    currentTool = toolName;
+    document.querySelectorAll('.tool-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 툴 버튼에 active 클래스 설정
+    let btn;
+    if (toolName === 'fill') {
+        btn = document.getElementById('toolFill');
+    } else if (toolName === 'eyedropper') { // ⭐ 스포이드 툴 ID 처리
+        btn = document.getElementById('toolEyedropper');
+    } else {
+        btn = document.getElementById('tool' + toolName.charAt(0).toUpperCase() + toolName.slice(1));
+    }
+    
+    if(btn) btn.classList.add('active');
+    
+    drawing = false;
+    isErasing = false;
+    
+    // 툴 변경 시 펜의 색상과 굵기로 context 설정 복원
+    updateContextStyles();
+}
+
+
+// === [Undo/Redo 및 상태 관리 함수] ===
+
+function saveState() {
+    if (historyPointer < history.length - 1) {
+        history = history.slice(0, historyPointer + 1);
+    }
+    
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    
+    const dataCopy = {
+        width: imageData.width,
+        height: imageData.height,
+        data: new Uint8ClampedArray(imageData.data)
+    };
+
+    history.push(dataCopy);
+    historyPointer++;
+    if (history.length > MAX_HISTORY_SIZE) {
+        history.shift();
+        historyPointer--;
+    }
+}
+
+function restoreState() {
+    if (historyPointer >= 0 && historyPointer < history.length) {
+        const dataCopy = history[historyPointer];
+        
+        const imageData = new ImageData(dataCopy.data, dataCopy.width, dataCopy.height);
+        
+        context.clearRect(0, 0, canvas.width, canvas.height); 
+        context.putImageData(imageData, 0, 0); 
+
+        // context의 설정값 복원 (펜 굵기로 복원)
+        updateContextStyles();
+    }
+}
+
+function restoreFromTempState() {
+    if (historyPointer >= 0) {
+        restoreState(); 
+    } else {
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.fillStyle = BACKGROUND_COLOR;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+    }
+}
+
+
+function handleKeydown(e) {
+    if (e.key === 'Shift') {
+        isShiftPressed = true;
+    }
+    
+    if (e.shiftKey && e.keyCode === 188) { // Shift + < (Undo)
+        e.preventDefault(); 
+        if (historyPointer > 0) {
+            historyPointer--;
+            restoreState();
+        }
+    } 
+    else if (e.shiftKey && e.keyCode === 190) { // Shift + > (Redo)
+        e.preventDefault();
+        if (historyPointer < history.length - 1) {
+            historyPointer++;
+            restoreState();
+        }
+    }
+}
+
+function handleKeyup(e) {
+    if (e.key === 'Shift') {
+        isShiftPressed = false;
+    }
+}
+// =============================
+
+
+function clearCanvas() {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = BACKGROUND_COLOR;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = document.getElementById("colorPicker").value; 
+
+    saveState(); 
+}
+
+function draw(curX, curY) { 
+    context.beginPath();
+    context.moveTo(startX, startY);
+    context.lineTo(curX, curY);
+    context.stroke();
+}
+
+// === [도형 그리기 관련 함수] ===
+
+function drawShapePreview(curX, curY) {
+    restoreFromTempState(); 
+        
+    context.save(); 
+    context.strokeStyle = document.getElementById("colorPicker").value; 
+    context.lineWidth = penLineWidthRange.value; 
+    context.setLineDash([5, 5]); 
+    
+    const isRegular = isShiftPressed;
+
+    switch (currentTool) {
+        case 'rectangle':
+            drawRectangle(startX, startY, curX, curY, isRegular);
+            break;
+        case 'circle':
+            drawCircle(startX, startY, curX, curY, isRegular);
+            break;
+        case 'triangle':
+            drawTriangle(startX, startY, curX, curY, isRegular);
+            break;
+    }
+
+    context.restore();
+}
+
+function drawFinalShape(curX, curY) {
+    restoreState(); 
+
+    context.setLineDash([]); 
+
+    context.strokeStyle = document.getElementById("colorPicker").value; 
+    context.lineWidth = penLineWidthRange.value;
+    
+    const isRegular = isShiftPressed;
+
+    switch (currentTool) {
+        case 'rectangle':
+            drawRectangle(startX, startY, curX, curY, isRegular);
+            break;
+        case 'circle':
+            drawCircle(startX, startY, curX, curY, isRegular);
+            break;
+        case 'triangle':
+            drawTriangle(startX, startY, curX, curY, isRegular);
+            break;
+    }
+}
+
+function drawRectangle(x1, y1, x2, y2, isRegular) {
+    let width = x2 - x1;
+    let height = y2 - y1;
+    
+    if (isRegular) {
+        const size = Math.min(Math.abs(width), Math.abs(height));
+        width = width > 0 ? size : -size;
+        height = height > 0 ? size : -size;
+    }
+    
+    context.beginPath();
+    context.strokeRect(x1, y1, width, height); 
+}
+
+function drawCircle(x1, y1, x2, y2, isRegular) {
+    const w = x2 - x1;
+    const h = y2 - y1;
+    const center_x = x1 + w / 2;
+    const center_y = y1 + h / 2;
+    
+    context.beginPath();
+
+    if (isRegular) {
+        // Shift + Drag: Perfect Circle (정원)
+        const radius_x = Math.abs(w / 2);
+        const radius_y = Math.abs(h / 2);
+        const radius = Math.min(radius_x, radius_y);
+        
+        context.arc(center_x, center_y, radius, 0, 2 * Math.PI);
+    } else {
+        // Simple Drag: Ellipse (타원)
+        const radius_x = Math.abs(w / 2);
+        const radius_y = Math.abs(h / 2);
+
+        // context.ellipse(x, y, radiusX, radiusY, rotation, startAngle, endAngle);
+        context.ellipse(center_x, center_y, radius_x, radius_y, 0, 0, 2 * Math.PI);
+    }
+    
+    context.stroke();
+}
+
+function drawTriangle(x1, y1, x2, y2, isRegular) {
+    let width = x2 - x1;
+    let height = y2 - y1;
+    
+    if (isRegular) {
+        const size = Math.min(Math.abs(width), Math.abs(height));
+        // 정삼각형 대신 정규 사각형 기반으로 수정 (일반적인 Shift+Drag 동작)
+        width = width > 0 ? size : -size;
+        height = height > 0 ? size : -size;
+    }
+    
+    const midX = x1 + width / 2;
+    const topX = midX;
+    const topY = y1;
+    const rightX = x1 + width;
+    const bottomY = y1 + height;
+    const leftX = x1;
+    
+    context.beginPath();
+    context.moveTo(topX, topY);         
+    context.lineTo(rightX, bottomY);    
+    context.lineTo(leftX, bottomY);     
+    context.closePath();                
+    context.stroke();
+}
+// ===================================
+
+// === [플러드 필(Flood Fill) 관련 함수] ===
+
+// Hex 색상 코드를 [R, G, B, A] 배열로 변환 (A는 255로 고정)
+function hexToRgbaArray(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return [r, g, b, 255]; 
+}
+
+// 두 RGBA 색상이 같은지 비교
+function colorsMatch(color1, color2) {
+    return color1[0] === color2[0] &&
+           color1[1] === color2[1] &&
+           color1[2] === color2[2] &&
+           color1[3] === color2[3];
+}
+
+// 픽셀의 RGBA 값 가져오기
+function getPixelColor(imageData, x, y) {
+    const index = (y * imageData.width + x) * 4;
+    return [
+        imageData.data[index],
+        imageData.data[index + 1],
+        imageData.data[index + 2],
+        imageData.data[index + 3]
+    ];
+}
+
+// 픽셀의 RGBA 값 설정
+function setPixelColor(imageData, x, y, r, g, b, a) {
+    const index = (y * imageData.width + x) * 4;
+    imageData.data[index] = r;
+    imageData.data[index + 1] = g;
+    imageData.data[index + 2] = b;
+    imageData.data[index + 3] = a;
+}
+
+
+function floodFill(startX, startY) {
+    // 1. 현재 캔버스 픽셀 데이터 가져오기
+    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+    const width = imageData.width;
+    const height = imageData.height;
+    
+    // 2. 클릭된 지점의 색상 (Target Color) 및 채울 색상 (Replacement Color) 구하기
+    const targetColor = getPixelColor(imageData, startX, startY);
+    const newColorHex = document.getElementById("colorPicker").value;
+    const newColor = hexToRgbaArray(newColorHex);
+
+    // 3. Target Color와 New Color가 같으면 채우기 불필요
+    if (colorsMatch(targetColor, newColor)) {
+        return;
+    }
+
+    // 4. 큐 기반 플러드 필 시작
+    const queue = [[startX, startY]]; // [x, y] 좌표 쌍을 담는 큐
+    
+    while (queue.length > 0) {
+        const [x, y] = queue.shift();
+        
+        // 경계 및 색상 일치 여부 확인
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        
+        const currentColor = getPixelColor(imageData, x, y);
+        
+        if (!colorsMatch(currentColor, targetColor)) continue;
+        
+        // 픽셀 색상 변경
+        setPixelColor(imageData, x, y, newColor[0], newColor[1], newColor[2], newColor[3]);
+        
+        // 인접 픽셀 4방향 큐에 추가
+        queue.push([x + 1, y]);
+        queue.push([x - 1, y]);
+        queue.push([x, y + 1]);
+        queue.push([x, y - 1]);
+    }
+    
+    // 5. 변경된 픽셀 데이터를 캔버스에 적용
+    context.putImageData(imageData, 0, 0);
+    
+    // 6. 상태 저장
+    saveState();
+}
+
+// ===================================
+
+// ⭐ 스포이드 (색상 추출) 기능
+function pickColor(x, y) {
+    const pixel = context.getImageData(x, y, 1, 1).data;
+    // RGBA 픽셀 데이터를 Hex 코드로 변환
+    const hex = '#' + rgbToHex(pixel[0], pixel[1], pixel[2]);
+    
+    document.getElementById("colorPicker").value = hex;
+    setTool('pencil'); // 색상 선택 후 펜 툴로 자동 전환
+}
+
+
+function down(e) { 
+    startX = e.offsetX; startY = e.offsetY;
+    
+    // Ctrl + 우클릭 (전체 지우기)
+    if (e.ctrlKey && e.button === 2) {
+        clearCanvas();
+        drawing = false;
+        return;
+    }
+    
+    // 마우스 왼쪽 클릭 (그리기, 도형 또는 채우기)
+    if (e.button === 0) {
+        
+        // ⭐ 스포이드 툴 로직 추가
+        if (currentTool === 'eyedropper') {
+            pickColor(startX, startY);
+            return; // 툴이 펜으로 자동 전환되므로 추가 작업 불필요
+        }
+
+        // ⭐ 채우기 툴 로직
+        if (currentTool === 'fill') {
+            floodFill(startX, startY);
+            return;
+        }
+
+        // 도형 그리기 모드
+        if (currentTool === 'rectangle' || currentTool === 'circle' || currentTool === 'triangle') {
+            isDrawingShape = true;
+            return;
+        }
+
+        // 직선 그리기 모드 (Ctrl + 좌클릭)
+        if (e.ctrlKey) { 
+            currentTool = 'line'; 
+            drawing = false;
+            isErasing = false;
+            // 펜 굵기/색상 적용
+            updateContextStyles();
+            
+            context.beginPath();
+            context.arc(startX, startY, 2, 0, 2 * Math.PI); 
+            context.fill(); 
+            return;
+        }
+        
+        // 펜 그리기 모드
+        drawing = true;
+        isErasing = false;
+        // 펜 굵기/색상 적용
+        updateContextStyles();
+
+    } 
+    // 마우스 우클릭 (지우개)
+    else if (e.button === 2) { 
+        isErasing = true;
+        drawing = true;
+        currentTool = 'pencil'; 
+        
+        // 지우개 굵기/색상 적용
+        updateContextStyles();
+    }
+}
+
+function up(e) { 
+    let shouldSave = true; 
+    
+    // 채우기 툴이나 스포이드 툴은 down에서 이미 상태를 저장했거나 상태 저장이 불필요하므로 건너뜁니다.
+    if (currentTool === 'fill' || currentTool === 'eyedropper') {
+        shouldSave = false;
+    }
+    // 도형 그리기 완료
+    else if (isDrawingShape) {
+        drawFinalShape(e.offsetX, e.offsetY);
+        isDrawingShape = false;
+        shouldSave = true; 
+    }
+    // 직선 그리기 완료
+    else if (currentTool === 'line') {
+        draw(e.offsetX, e.offsetY);
+        currentTool = 'pencil'; 
+        // UI 툴바 상태 복귀
+        document.getElementById('toolPencil').classList.add('active');
+        document.querySelectorAll('.tool-button').forEach(btn => {
+            if(btn.id !== 'toolPencil') btn.classList.remove('active');
+        });
+    }
+    else if (!drawing) {
+        shouldSave = false; 
+    }
+
+    drawing = false; 
+    isErasing = false; 
+    
+    // 마우스 버튼을 놓으면 펜의 기본 설정으로 복원
+    updateContextStyles();
+
+    if (shouldSave) {
+        saveState(); 
+    }
+}
+
+function move(e) {
+    let curX = e.offsetX, curY = e.offsetY;
+    
+    // 도형 그리기 미리보기
+    if (isDrawingShape) {
+        drawShapePreview(curX, curY);
+        return;
+    }
+    
+    // 연속 그리기 방지 툴 (fill, eyedropper 포함)
+    if(currentTool === 'line' || currentTool === 'fill' || currentTool === 'eyedropper' || currentTool === 'rectangle' || currentTool === 'circle' || currentTool === 'triangle') return;
+    
+    if(!drawing) return; 
+    
+    // 펜 또는 지우개 연속 그리기
+    draw(curX, curY);  
+    startX = curX; startY = curY;
+}
+
+function out(e) { 
+    // 도형 그리기 중 캔버스 밖으로 나가면 취소
+    if (isDrawingShape) {
+        restoreState(); 
+        isDrawingShape = false;
+    }
+    
+    if (drawing) {
+        saveState();
+    }
+    drawing = false; 
+    isErasing = false; 
+    
+    updateContextStyles();
+}
+
+function downloadCanvas() {
+    const imageURL = canvas.toDataURL("image/png");
+
+    const link = document.createElement('a');
+    link.download = '온라인_그림판_' + new Date().getTime() + '.png';
+    link.href = imageURL;
+    
+    document.body.appendChild(link);
+    link.click();
+    
+    document.body.removeChild(link);
+}
+function uploadCanvas() {
+    // 1. 캔버스 그림 데이터를 Base64 형식으로 가져옵니다.
+    const imageBase64 = canvas.toDataURL("image/png");
+
+    // 2. 그림 데이터를 브라우저의 임시 저장소(Local Storage)에 저장합니다.
+    //    이 데이터는 커뮤니티 페이지에서 '작성하기' 버튼을 누를 때 사용됩니다.
+    localStorage.setItem('currentDrawing', imageBase64);
+
+    alert("📢 그림이 임시 저장되었습니다. 커뮤니티 페이지에서 '글 작성'을 눌러 게시하세요!");
+    
+    // 3. 커뮤니티 페이지로 이동
+    goToCommunity(); 
+}
+   
+function goToCommunity() {
+    // 서버를 통해 community.html로 접속하도록 경로 유지
+    window.location.href = "http://localhost:3000/community.html";
+}
+</script>
+</body>
+</html>
