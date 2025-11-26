@@ -720,10 +720,10 @@ function sortAndDisplayPosts(sortType) {
                 <img src="${post.imageData}" alt="${post.title}" class="post-image">
                 <div class="post-info">
                     <h3>${post.title}</h3>
-                    <div class="post-stats">
-                        <span>👤 ${post.author}</span>
-                        <span>❤️ ${post.likes || 0} | 💬 ${post.comments ? post.comments.length : 0}</span>
-                    </div>
+                     <div class="post-stats">
+                <span>👤 ${post.author}</span>
+                <span>❤️ ${post.likes || 0} | 💬 ${post.commentCount || 0}</span>
+            </div>
                 </div>
             `;
             container.appendChild(postElement);

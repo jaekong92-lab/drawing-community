@@ -179,25 +179,49 @@ postRouter.get('/posts', authenticateToken, async (req, res) => {
         const sortType = req.query.sort || 'latest';
         let posts;
 
+        // 몽고DB의 강력한 aggregate 기능으로 게시물과 댓글 수를 한번에 조회합니다.
+        const aggregationPipeline = [
+            // 1. Comment 컬렉션에서 각 postId 별로 댓글 수를 계산합니다.
+            {
+                $group: {
+                    _id: "$postId",
+                    commentCount: { $sum: 1 }
+                }
+            },
+            // 2. 계산된 댓글 수를 Post 컬렉션에 합치기 위해 잠시 대기
+        ];
+
+        const commentCounts = await Comment.aggregate(aggregationPipeline);
+        const commentCountMap = new Map(commentCounts.map(item => [item._id.toString(), item.commentCount]));
+
+        // 3. Post 컬렉션을 조회합니다.
+        let sortOption;
         if (sortType === 'comments') {
-            // 댓글순 정렬: aggregate 사용
-            posts = await Post.aggregate([
-                { $addFields: { commentCount: { $size: { "$ifNull": ["$comments", []] } } } },
-                { $sort: { commentCount: -1, createdAt: -1 } }
-            ]);
+            // 댓글순 정렬은 이제 자바스크립트에서 처리 (더 간단하고 확실함)
+            sortOption = { createdAt: -1 }; 
+        } else if (sortType === 'popular') {
+            sortOption = { likes: -1, createdAt: -1 };
         } else {
-            // 인기순 또는 최신순 정렬
-            const sortOption = sortType === 'popular' ? { likes: -1, createdAt: -1 } : { createdAt: -1 };
-            posts = await Post.find().sort(sortOption).lean();
+            sortOption = { createdAt: -1 };
         }
-        
+        posts = await Post.find().sort(sortOption).lean();
+
+        // 4. 각 게시물에 댓글 수를 추가합니다.
+        posts.forEach(post => {
+            post.commentCount = commentCountMap.get(post._id.toString()) || 0;
+        });
+
+        // 5. 만약 댓글순 정렬이었다면, 여기서 최종 정렬합니다.
+        if (sortType === 'comments') {
+            posts.sort((a, b) => b.commentCount - a.commentCount || new Date(b.createdAt) - new Date(a.createdAt));
+        }
+
         const ranking = await Post.find().sort({ likes: -1, createdAt: -1 }).limit(10).lean();
 
         const postsWithLikedStatus = posts.map(post => {
-            const postObj = { ...post }; 
-            // ObjectId 비교를 위해 .some()과 .equals() 사용
+            const postObj = { ...post };
             postObj.isLiked = post.likedBy && post.likedBy.some(id => id.equals(req.user.id));
-            delete postObj.likedBy; 
+            delete postObj.likedBy;
             return postObj;
         });
 
