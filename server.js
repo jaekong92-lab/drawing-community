@@ -292,7 +292,35 @@ postRouter.post('/posts/:id/like', authenticateToken, async (req, res) => { // �
     }
 });
 
+postRouter.post('/posts/:id/comment', authenticateToken, async (req, res) => {
+    try {
+        const postId = req.params.id;
+        const { commentText } = req.body;
 
+        if (!commentText) {
+            return res.status(400).json({ message: '댓글 내용을 입력해주세요.' });
+        }
+
+        const post = await Post.findById(postId);
+        if (!post) {
+            return res.status(404).json({ message: '게시물을 찾을 수 없습니다.' });
+        }
+
+        const newComment = new Comment({
+            text: commentText,
+            author: req.user.username,
+            authorId: req.user.id,
+            postId: postId
+        });
+
+        await newComment.save();
+        res.status(201).json(newComment);
+
+    } catch (error) {
+        console.error('댓글 추가 오류:', error);
+        res.status(500).json({ message: '댓글 등록에 실패했습니다.' });
+    }
+});
 postRouter.get('/users/myposts', authenticateToken, async (req, res) => {
     try {
         // 현재 로그인한 사용자(req.user.id)가 작성한 모든 게시글을 찾아서 최신순으로 정렬합니다.
