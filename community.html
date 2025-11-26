@@ -318,7 +318,7 @@
         <span id="userInfo" style="margin-right: 15px; font-weight: bold;"></span>
         
         <button id="writeBtn" onclick="checkAuthAndOpenWriteModal()" disabled>🔒 로그인 후 작성 가능</button>
-        
+        <button id="myActivityBtn" onclick="showMyActivity()" style="display: none; background-color: #ff9800;">내 활동</button>
         <button id="authBtn" onclick="openAuthModal()">🚪 로그인 / 회원가입</button>
     </div>
 </div>
@@ -426,6 +426,28 @@
         </form>
     </div>
 </div>
+</div>
+</div>
+
+<!-- ✅ '내 활동' 모달 코드를 여기에 통째로 붙여넣으세요 -->
+<div id="myActivityModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <span class="close-btn" onclick="closeModal('myActivityModal')">&times;</span>
+        <h2>내 활동 내역</h2>
+        <hr>
+        
+        <!-- 탭 버튼 -->
+        <div class="sort-options" style="margin-bottom: 20px;">
+            <button id="myPostsTab" class="active" onclick="showMyPosts()">내가 쓴 게시글</button>
+            <button id="myCommentsTab" onclick="showMyComments()">내가 쓴 댓글</button>
+        </div>
+
+        <!-- 내용이 표시될 영역 -->
+        <div id="myActivityContent" style="max-height: 60vh; overflow-y: auto;">
+            <!-- 여기에 내가 쓴 게시글 또는 댓글 목록이 동적으로 채워집니다. -->
+        </div>
+    </div>
+</div>
     <script>
 const API_BASE_URL = window.location.origin; 
     let IS_LOGGED_IN = false;
@@ -473,7 +495,7 @@ const API_BASE_URL = window.location.origin;
         const userInfoSpan = document.getElementById('userInfo');
         const writeBtn = document.getElementById('writeBtn');
         const authBtn = document.getElementById('authBtn');
-
+        const myActivityBtn = document.getElementById('myActivityBtn');
         // 1. 로그인 상태 설정
         IS_LOGGED_IN = !!(token && username); // Boolean으로 명확하게 설정
         LOGGED_IN_USERNAME = username || '';
@@ -485,10 +507,12 @@ const API_BASE_URL = window.location.origin;
             if (IS_LOGGED_IN) {
                 authBtn.textContent = '🚪 로그아웃';
                 authBtn.onclick = logout;
+                if(myActivityBtn) myActivityBtn.style.display = 'inline-block';
             } else {
                 authBtn.textContent = '🚪 로그인 / 회원가입';
                 // ⭐ 버튼 클릭 이벤트가 제대로 연결되도록 다시 설정
-                authBtn.onclick = openAuthModal; 
+                authBtn.onclick = openAuthModal;
+                if(myActivityBtn) myActivityBtn.style.display = 'none'; 
             }
             // ⭐ 이 버튼은 항상 활성화되어야 합니다.
             authBtn.disabled = false; 
@@ -973,56 +997,179 @@ const response = await fetch(url, {
         comments.forEach(comment => {
             const commentElement = document.createElement('div');
             commentElement.className = 'comment';
-            commentElement.innerHTML = `<p style="margin: 0;"><strong>${comment.author}</strong>: ${comment.text}</p>`;
+            let innerHTML = `<p style="margin: 0;"><strong>${comment.author}</strong>: ${comment.text}</p>`;
+        if (IS_LOGGED_IN && LOGGED_IN_USERNAME === comment.author) {
+            innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
+                            ${innerHTML}
+                            <button onclick="deleteCommentFromPost('${comment._id}')" style="padding: 2px 6px; font-size: 0.8em; background-color:#6c757d;">삭제</button>
+                         </div>`;
+        }
+            commentElement.innerHTML = innerHTML;
+
             commentList.appendChild(commentElement);
         });
     }
 
     async function addComment() {
-        if (!IS_LOGGED_IN) {
-            alert("로그인 후 댓글을 작성할 수 있습니다.");
-            openAuthModal();
-            return;
-        }
-        
-        const commentInput = document.getElementById('commentInput');
-        const commentText = commentInput.value.trim();
-
-        if (!commentText) {
-            alert("댓글 내용을 입력해주세요.");
-            return;
-        }
-        
-        try {
-            const url = `${API_BASE_URL}/posts/${currentPostId}/comment`;
-            
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ commentText: commentText })
-            });
-            
-            if (response.ok) {
-                commentInput.value = ''; 
-                const post = await fetchPostDetails(currentPostId); 
-                if (post) {
-                     displayComments(post.comments); 
-                     fetchPosts(); 
-                }
-            } else if (response.status === 401) {
-                 alert("댓글을 작성할 권한이 없거나 로그인이 만료되었습니다.");
-                 logout();
-            } else {
-                alert("댓글 작성에 실패했습니다.");
-            }
-        } catch (error) {
-            console.error('Error adding comment:', error);
-            alert("댓글 작성 중 서버 오류가 발생했습니다.");
-        }
+    if (!IS_LOGGED_IN) {
+        alert("로그인 후 댓글을 작성할 수 있습니다.");
+        openAuthModal();
+        return;
     }
+    
+    const commentInput = document.getElementById('commentInput');
+    const commentText = commentInput.value.trim();
+
+    if (!commentText) {
+        alert("댓글 내용을 입력해주세요.");
+        return;
+    }
+    
+    try {
+        const url = `${API_BASE_URL}/posts/${currentPostId}/comment`;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ commentText: commentText })
+        });
+        
+        if (response.ok) {
+            commentInput.value = ''; 
+            // ✅ 서버에서 댓글 목록 전체를 다시 보내주지 않으므로,
+            // 게시물 상세 정보를 다시 요청하여 댓글을 포함한 모든 것을 갱신합니다.
+            const updatedPost = await fetchPostDetails(currentPostId); 
+            if (updatedPost) {
+                 displayComments(updatedPost.comments); 
+                 // 댓글 수가 변경되었으므로 전체 게시물 목록도 새로고침합니다.
+                 fetchPosts(document.querySelector('.sort-options button.active').id.replace('sort', '').toLowerCase()); 
+            }
+        } else if (response.status === 401) {
+             alert("댓글을 작성할 권한이 없거나 로그인이 만료되었습니다.");
+             logout();
+        } else {
+            alert("댓글 작성에 실패했습니다.");
+        }
+    } catch (error) {
+        console.error('Error adding comment:', error);
+        alert("댓글 작성 중 서버 오류가 발생했습니다.");
+    }
+}
+function showMyActivity() {
+    openModal('myActivityModal');
+    showMyPosts(); // 기본으로 '내가 쓴 게시글' 탭을 보여줌
+}
+
+// --- 내가 쓴 게시글 목록 보여주기 ---
+async function showMyPosts() {
+    document.getElementById('myPostsTab').classList.add('active');
+    document.getElementById('myCommentsTab').classList.remove('active');
+    const contentArea = document.getElementById('myActivityContent');
+    contentArea.innerHTML = '<p>게시글을 불러오는 중...</p>';
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/myposts`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        if (!response.ok) throw new Error('서버 응답 오류');
+        const myPosts = await response.json();
+        if (myPosts.length === 0) {
+            contentArea.innerHTML = '<p>작성한 게시글이 없습니다.</p>';
+            return;
+        }
+        let html = '<ul style="list-style:none; padding:0;">';
+        myPosts.forEach(post => {
+            html += `<li style="display:flex; justify-content:space-between; align-items:center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                        <span style="cursor:pointer;" onclick="openPostAndCloseActivity('${post._id}')">${post.title} (❤️ ${post.likes || 0})</span>
+                        <button onclick="deletePostFromActivity('${post._id}')" style="background-color:#dc3545; padding: 5px 10px;">삭제</button>
+                     </li>`;
+        });
+        html += '</ul>';
+        contentArea.innerHTML = html;
+    } catch (error) {
+        contentArea.innerHTML = `<p>오류: ${error.message}</p>`;
+    }
+}
+
+// --- 내가 쓴 댓글 목록 보여주기 ---
+async function showMyComments() {
+    document.getElementById('myCommentsTab').classList.add('active');
+    document.getElementById('myPostsTab').classList.remove('active');
+    const contentArea = document.getElementById('myActivityContent');
+    contentArea.innerHTML = '<p>댓글을 불러오는 중...</p>';
+    try {
+        const response = await fetch(`${API_BASE_URL}/users/mycomments`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        if (!response.ok) throw new Error('서버 응답 오류');
+        const myComments = await response.json();
+        if (myComments.length === 0) {
+            contentArea.innerHTML = '<p>작성한 댓글이 없습니다.</p>';
+            return;
+        }
+        let html = '<ul style="list-style:none; padding:0;">';
+        myComments.forEach(comment => {
+            if (comment.postId) {
+                html += `<li style="display:flex; justify-content:space-between; align-items:center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                            <div>
+                                <p style="margin:0;">${comment.text}</p>
+                                <small style="color: #666;">- <span style="cursor:pointer; text-decoration:underline;" onclick="openPostAndCloseActivity('${comment.postId._id}')">'${comment.postId.title}'</span> 게시물에 작성</small>
+                            </div>
+                            <button onclick="deleteCommentFromActivity('${comment._id}')" style="background-color:#dc3545; padding: 5px 10px;">삭제</button>
+                         </li>`;
+            }
+        });
+        html += '</ul>';
+        contentArea.innerHTML = html;
+    } catch (error) {
+        contentArea.innerHTML = `<p>오류: ${error.message}</p>`;
+    }
+}
+
+// --- '내 활동'에서 게시물 삭제 ---
+async function deletePostFromActivity(postId) {
+    if (!confirm("정말로 이 게시물을 삭제하시겠습니까? 관련 댓글도 모두 삭제됩니다.")) return;
+    await deletePost(postId); // 기존의 deletePost 함수 재사용
+    showMyPosts(); // 목록 갱신
+}
+
+// --- '내 활동'에서 댓글 삭제 ---
+async function deleteCommentFromActivity(commentId) {
+    if (!confirm("정말로 이 댓글을 삭제하시겠습니까?")) return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/comments/${commentId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('삭제 실패');
+        alert("댓글이 삭제되었습니다.");
+        showMyComments(); // 내 댓글 목록 갱신
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+// --- 게시물 상세창에서 댓글 삭제 ---
+async function deleteCommentFromPost(commentId) {
+    if (!confirm("정말로 이 댓글을 삭제하시겠습니까?")) return;
+    try {
+        const response = await fetch(`${API_BASE_URL}/comments/${commentId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (!response.ok) throw new Error('삭제 실패');
+        alert("댓글이 삭제되었습니다.");
+        // 댓글 삭제 후 현재 열려있는 게시물 상세 정보 갱신
+        const updatedPost = await fetchPostDetails(currentPostId);
+        if (updatedPost) displayComments(updatedPost.comments);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+// --- '내 활동' 모달 닫고 게시물 상세 모달 열기 ---
+function openPostAndCloseActivity(postId) {
+    closeModal('myActivityModal');
+    showPostDetail(postId);
+}
     </script>
 </body>
 </html>
