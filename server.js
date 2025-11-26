@@ -13,7 +13,8 @@ const JWT_SECRET = 'your_strong_jwt_secret';
 
 // --- 1. 미들웨어 설정 ---
 app.use(cors()); 
-app.use(express.json()); 
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // --- 2. MongoDB 연결 ---
 // ⭐ DB 비밀번호 'gate2330' 적용
