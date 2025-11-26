@@ -313,7 +313,7 @@
     <p>그림을 올려주세요~.</p>
     
     <div class="toolbar">
-    <a href="./index.html"><button>⬅️ 그림판으로 돌아가기</button></a> <!-- ✅ 이렇게 수정! -->
+    <a href="./index.html"><button>⬅️ 그림판으로 돌아가기</button></a>
     <div>
         <span id="userInfo" style="margin-right: 15px; font-weight: bold;"></span>
         
@@ -437,9 +437,9 @@ const API_BASE_URL = window.location.origin;
     document.addEventListener('DOMContentLoaded', () => {
         // ⭐ 중요: 초기 로드 시 버튼이 비활성화되는 것을 방지합니다.
         const authBtn = document.getElementById('authBtn');
-        if (authBtn) {
-            authBtn.disabled = false;
-        }
+        if (IS_LOGGED_IN) {
+    fetchPosts(); // 또는 fetchPosts('latest');
+}
         
         checkLoginStatus(); 
 
@@ -637,65 +637,46 @@ const API_BASE_URL = window.location.origin;
     // 2. 게시물 로드 및 기타 기능 (이하 코드는 이전과 동일)
     // ==========================================================
 
-    async function fetchPosts() {
-        if (!IS_LOGGED_IN) {
-            displayLoginRequiredMessage();
+    // ✅ 아래 두 함수를 통째로 교체해주세요.
+
+async function fetchPosts(sortType = 'latest' ) {
+    if (!IS_LOGGED_IN) {
+        displayLoginRequiredMessage();
+        return;
+    }
+    try {
+        const token = localStorage.getItem('token');
+        const headers = { 'Authorization': `Bearer ${token}` };
+        // API 주소에 정렬 기준을 쿼리 파라미터로 추가
+        const response = await fetch(`${API_BASE_URL}/posts?sort=${sortType}`, { headers });
+        
+        if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+                alert("인증이 만료되었거나 접근 권한이 없습니다. 다시 로그인해주세요.");
+                logout();
+            }
             return;
         }
-        
-        try {
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-            const response = await fetch(`${API_BASE_URL}/posts`, { headers });
-            
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    alert("인증이 만료되었거나 접근 권한이 없습니다. 다시 로그인해주세요.");
-                    logout(); 
-                    return;
-                }
-                throw new Error(`게시물 로드 실패: HTTP status ${response.status}`);
-            }
-            
-            const data = await response.json();
-            if (!Array.isArray(data.posts)) {
-                allFetchedPosts = [];
-                sortAndDisplayPosts('latest'); 
-                displayRanking(data.ranking); 
-                return;
-            }
-
-            allFetchedPosts = data.posts;
-            sortAndDisplayPosts('latest'); 
-            displayRanking(data.ranking);
-
-        } catch (error) {
-            console.error("게시물 로드 실패:", error);
-            alert(`게시물을 불러오는 데 실패했습니다. 서버(server.js)가 실행 중인지 확인하세요. 오류: ${error.message}`);
-            displayPosts([]);
-            displayRanking([]);
-            displayLoginRequiredMessage(); 
-        }
+        const data = await response.json();
+        allFetchedPosts = data.posts || [];
+        displayPosts(allFetchedPosts); // 서버에서 받은 데이터로 바로 화면 표시
+        displayRanking(data.ranking || []);
+    } catch (error) {
+        console.error("게시물 로드 실패:", error);
+        alert(`게시물을 불러오는 데 실패했습니다. 서버가 응답하지 않습니다.`);
     }
+}
 
-    function sortAndDisplayPosts(sortType) {
-        const sortButtons = document.querySelectorAll('.sort-options button');
-        sortButtons.forEach(btn => btn.classList.remove('active'));
-        const activeBtn = document.getElementById(`sort${sortType.charAt(0).toUpperCase() + sortType.slice(1)}`);
-        if(activeBtn) activeBtn.classList.add('active');
-        
-        let sortedPosts = [...allFetchedPosts]; 
+function sortAndDisplayPosts(sortType) {
+    // 버튼 활성화/비활성화 처리
+    document.querySelectorAll('.sort-options button').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.getElementById(`sort${sortType.charAt(0).toUpperCase() + sortType.slice(1)}`);
+    if(activeBtn) activeBtn.classList.add('active');
+    
+    // 서버에 새로운 정렬 기준으로 데이터를 다시 요청
+    fetchPosts(sortType);
+}
 
-        if (sortType === 'latest') {
-            sortedPosts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        } else if (sortType === 'popular') {
-            sortedPosts.sort((a, b) => b.likes - a.likes);
-        } else if (sortType === 'comments') {
-            sortedPosts.sort((a, b) => (b.comments ? b.comments.length : 0) - (a.comments ? b.comments.length : 0));
-        }
-
-        displayPosts(sortedPosts);
-    }
 
     function displayPosts(posts) {
         const container = document.getElementById('postList'); 

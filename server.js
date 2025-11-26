@@ -49,11 +49,10 @@ const UserSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-UserSchema.pre('save', async function(next) {
+UserSchema.pre('save', async function() { 
     if (this.isModified('password')) {
         this.password = await bcrypt.hash(this.password, 10);
     }
-
 });
 
 const Post = mongoose.model('Post', PostSchema);
@@ -170,17 +169,29 @@ postRouter.post('/posts', authenticateToken, async (req, res) => {  // ⭐ /auth
 });
 
 // --- 전체 게시물 조회 및 랭킹 ---
-postRouter.get('/posts', authenticateToken, async (req, res) => { // ⭐ /auth 제거
+postRouter.get('/posts', authenticateToken, async (req, res) => {
     try {
-        const posts = await Post.find().sort({ createdAt: -1 }); 
+        const sortType = req.query.sort || 'latest';
+        let posts;
+
+        if (sortType === 'comments') {
+            // 댓글순 정렬: aggregate 사용
+            posts = await Post.aggregate([
+                { $addFields: { commentCount: { $size: { "$ifNull": ["$comments", []] } } } },
+                { $sort: { commentCount: -1, createdAt: -1 } }
+            ]);
+        } else {
+            // 인기순 또는 최신순 정렬
+            const sortOption = sortType === 'popular' ? { likes: -1, createdAt: -1 } : { createdAt: -1 };
+            posts = await Post.find().sort(sortOption).lean();
+        }
         
-        const ranking = await Post.find()
-            .sort({ likes: -1, createdAt: -1 })
-            .limit(5);
+        const ranking = await Post.find().sort({ likes: -1, createdAt: -1 }).limit(10).lean();
 
         const postsWithLikedStatus = posts.map(post => {
-            const postObj = post.toObject();
-            postObj.isLiked = postObj.likedBy.includes(req.user.id);
+            const postObj = { ...post }; 
+            // ObjectId 비교를 위해 .some()과 .equals() 사용
+            postObj.isLiked = post.likedBy && post.likedBy.some(id => id.equals(req.user.id));
             delete postObj.likedBy; 
             return postObj;
         });
